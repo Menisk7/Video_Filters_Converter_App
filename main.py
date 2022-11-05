@@ -3,9 +3,14 @@ import os
 import sys
 import shutil
 
+frames = []
+imgNames = []
+dataEdge = []
+
+
 def vidToJpg(video):
-    datalist = []
-    imgarr = []
+    global imgNames
+    global frames
     # Capture frames from file:
     cap = cv2.VideoCapture(video)
     try:
@@ -26,56 +31,48 @@ def vidToJpg(video):
         # Capture frame-by-frame
         ret, frame = cap.read()
         name = './data/frame' + str(currentFrame) + '.jpg'
-        if (currentFrame % 30 == 0):
-            print('frame ' + str(currentFrame))
-        # Adds images to imgarr
-        imgarr.append([name, frame])
-        # Datalist consists of images names
-        datalist.append(name)
+
+        print('vid to jpg frame ' + str(currentFrame))
+        # Adds frames to frames array
+        frames.append(frame)
+        # imgNames are not modified
+        imgNames.append(name)
+        cv2.imwrite(name, frame)
         currentFrame += 1
 
-    # Saves images
-    saveImages(imgarr)
     # When everything done, release the capture
     print('vid to jpg done...')
     cap.release()
     cv2.destroyAllWindows()
-    return datalist
 
 
-def saveImages(imgarr):
-    print('saving images...')
-    # print(imgarr[0][0])
-    # print(imgarr[0][1])
-
-    for i in range(len(imgarr)):
-        # imgarr has a structure like [ [name,frame]]
-        # so you do this imgarr[i][0] for name
-        # and  imgarr[i][1] for frame
-        if (i % 30 == 0):
-            print('saved image ' + str(i))
-        cv2.imwrite(imgarr[i][0], imgarr[i][1])
-
-
-def makeEdgeJpg(datalist, t_lower, t_upper, L2Gradient, definition=7):
+def makeEdgeJpg(imgNames, t_lower, t_upper, L2Gradient, imgOption, definition=7):
     currentFrame = 0
     print('creating edge jpgs....')
-    dataEL = []
-
-    for file in datalist:
+    global dataEdge
+    imgOut = ""
+    for file in imgNames:
         img = cv2.imread(file)
-        edge = cv2.Canny(img, t_lower, t_upper, apertureSize=definition, L2gradient=L2Gradient)
+
+        # sk_gray, sk_color = cv2.pencilSketch(img, sigma_s=100, sigma_r=0.2, shade_factor=0)
+        match imgOption:
+            case "canny":
+                imgOut = cv2.Canny(img, t_lower, t_upper, apertureSize=definition, L2gradient=L2Gradient)
+            case "pencil":
+                imgOut = cv2.pencilSketch(img, sigma_s=100, sigma_r=0.2, shade_factor=0)
+            case _:
+                imgOut = img
+
         name = './dataEdge/frame' + str(currentFrame) + '.jpg'
-        cv2.imwrite(name, edge)
-        dataEL.append(name)
-        if (currentFrame % 30 == 0):
-            print('frame ' + str(currentFrame))
+        cv2.imwrite(name, imgOut)
+        dataEdge.append(name)
+        if currentFrame % 30 == 0:
+            print('edge frame ' + str(currentFrame))
         currentFrame += 1
 
-    return dataEL
 
-
-def makeEdgeVid(dataEdge):
+def makeEdgeVid():
+    global dataEdge
     size = (0, 0)
     img_array = []
     print('creating edge vid....')
@@ -85,7 +82,7 @@ def makeEdgeVid(dataEdge):
         height, width, layers = img.shape
         size = (width, height)
         img_array.append(img)
-        if (i % 30 == 0):
+        if i % 30 == 0:
             print('frame ' + str(i))
 
     out = cv2.VideoWriter('project.avi', cv2.VideoWriter_fourcc(*'DIVX'), 30, size)
@@ -113,25 +110,35 @@ def cleanUp():
         print("Error: Couldn't remove directories: dataEdge/data")
 
 
+def devMode(x): return x
+
+
 ####################
 #       MAIN       #
 ####################
 # sys.argv[1] gets command line parameter
 # example: python main.py name_of_the_video.mp4
-if len(sys.argv) == 1:
-    fileName = input("Type name of the file: ")
+
+
+if devMode(1):
+    fileName = "testvid.mp4"
 else:
-    fileName = sys.argv[1]
+    if len(sys.argv) == 1:
+        fileName = input("Type name of the file: ")
+    else:
+        fileName = sys.argv[1]
+
 if os.path.isfile(fileName):
     # Defining all the parameters
     definition = 3  # odd between 3 and 7 including
     L2Gradient = False  # Boolean L2Gradient is  abs(gradient_x) + abs(gradient_y)
     lower = 100  # Lower Threshold
     upper = 350  # Upper threshold
+    vidEffect = "canny"
     createDirs()
-    datalist = vidToJpg(fileName)
-    dataEdge = makeEdgeJpg(datalist, lower, upper, L2Gradient, definition)
-    makeEdgeVid(dataEdge)
+    vidToJpg(fileName)
+    makeEdgeJpg(imgNames, lower, upper, L2Gradient, vidEffect, definition)
+    makeEdgeVid()
     cleanUp()
 else:
     print("Input Video" + fileName + " not found")
